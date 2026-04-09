@@ -1,0 +1,43 @@
+/* ----- Footer ----- */
+footer {
+    width: 100%;
+    background-color: #FFFFFF;
+
+    /* 헤더의 border-bottom과 대칭되는 border-top 적용 */
+    border-top: 2px solid #0F172A;
+
+    padding: 30px 20px; /* 상하, 좌우 여백 */
+    margin-top: auto; /* 콘텐츠가 적어도 항상 하단에 위치 (layout.css에서 flex: 1 필요) */
+
+    color: #94A3B8; /* 풋터 텍스트는 Cool Gray */
+    font-size: 14px;
+}
+
+.footer-container {
+    /* (중요) 헤더의 nav와 동일한 max-width 및 중앙 정렬 적용 */
+    max-width: 500px;
+    margin: 0 auto;
+
+    text-align: center; /* 텍스트 중앙 정렬 */
+}
+
+.footer-links {
+    margin-bottom: 15px;
+}
+
+.footer-links a {
+    color: #475569; /* Slate Gray 링크 색상 */
+    margin: 0 10px; /* 링크 사이 간격 */
+    text-decoration: none; /* header.css의 전역 a 스타일이 있다면 필요없음 */
+}
+
+/* header.css의 전역 a:hover 스타일(underline)을 따름 */
+.footer-links a:hover {
+    text-decoration: underline;
+    color: #F97316; /* hover 시 Vivid Orange */
+}
+
+.footer-info p {
+    margin: 5px 0; /* 저작권 텍스트 줄 간격 조절 */
+    line-height: 1.6;
+}

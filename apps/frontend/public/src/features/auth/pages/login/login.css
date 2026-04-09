@@ -1,0 +1,63 @@
+/* Styles for the main authentication container layout */
+.auth-main {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+}
+
+.auth-container {
+    width: 100%;
+    max-width: 400px;
+    background-color: var(--background-light);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color);
+}
+
+.auth-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.auth-form input {
+    /* The base input styles are in global.css */
+    /* This file can contain overrides or specific adjustments if needed */
+}
+
+.auth-button {
+    width: 100%;
+    padding: 14px 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-top: 12px;
+}
+
+.auth-button:hover {
+    background-color: #dd6311;
+}
+
+.form-footer {
+    text-align: center;
+    margin-top: 24px;
+}
+
+.form-footer p {
+    color: var(--body-text-color);
+}
+
+.form-footer a {
+    color: var(--primary-color);
+    font-weight: 500;
+}

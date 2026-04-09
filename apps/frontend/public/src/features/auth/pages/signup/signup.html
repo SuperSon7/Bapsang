@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회원가입</title>
+
+    <!-- Global & Layout CSS -->
+    <link rel="stylesheet" href="/global.css">
+    <link rel="stylesheet" href="/src/shared/component/header/header.css">
+    <link rel="stylesheet" href="/src/shared/component/footer/footer.css">
+
+    <!-- Page-specific CSS -->
+    <link rel="stylesheet" href="/src/features/auth/pages/signup/signup.css">
+    <link rel="stylesheet" href="/src/shared/component/toast/toast.css">
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/lib/axios.min.js"></script>
+    <script src="/src/features/auth/authStore.js"></script>
+    <script type="module" src="/src/shared/component/toast/toast.js"></script>
+    <script type="module" src="/src/shared/component/layout.js" defer></script>
+    <script src="/src/features/auth/pages/signup/signup.js" type="module"></script>
+</head>
+
+<body class="auth-body">
+
+<div id="header-placeholder"></div>
+
+<main class="auth-main">
+    <div class="auth-container">
+        <h2 class="auth-title">회원가입</h2>
+        <form id="signup" class="auth-form">
+            <div class="form-group image-uploader">
+                <label for="image-input" class="image-upload-label">
+                    <img class="image-preview" id="image-preview" src="/assets/images/user.png" alt="프로파일 이미지 미리보기">
+                </label>
+                <input type="file" id="image-input" accept="image/*" class="visually-hidden">
+            </div>
+
+            <div class="form-group">
+                <label for="email">이메일<span class="required">*</span></label>
+                <input type="email" id="email" name="email" placeholder="이메일을 입력하세요" required>
+                <p id="emailVerified" class="form-validation-message" style="display: none;"></p>
+            </div>
+
+            <div class="form-group">
+                <label for="password">비밀번호<span class="required">*</span></label>
+                <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
+                <p id="passwordVerified" class="form-validation-message" style="display: none;"></p>
+            </div>
+
+            <div class="form-group">
+                <label for="passwordConfirm">비밀번호 확인<span class="required">*</span></label>
+                <input type="password" id="passwordConfirm" name="passwordConfirm" placeholder="비밀번호를 다시 입력하세요" required>
+                <p id="passwordConfirmVerified" class="form-validation-message" style="display: none;"></p>
+            </div>
+
+            <div class="form-group">
+                <label for="nickname">닉네임<span class="required">*</span></label>
+                <input type="text" id="nickname" placeholder="닉네임을 입력하세요" required>
+                <p id="nicknameVerified" class="form-validation-message" style="display: none;"></p>
+            </div>
+
+            <button type="submit" id="signup-button" class="auth-button" disabled>회원가입</button>
+        </form>
+        <div class="form-footer">
+            <p>이미 계정이 있으신가요? <a href="/login">로그인</a></p>
+        </div>
+    </div>
+</main>
+
+<div id="footer-placeholder"></div>
+
+</body>
+</html>

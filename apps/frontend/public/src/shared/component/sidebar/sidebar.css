@@ -1,0 +1,67 @@
+/* ----- Sidebar ----- */
+.sidebar {
+    background-color: white;
+    /* 헤더의 border-bottom과 일관성을 주기 위해 border-right 적용 */
+    border-right: 2px solid #000000;
+
+    /* 사이드바는 세로로 꽉 차게 설정 (layout.css에서 높이 관리) */
+    height: 100%;
+
+    padding: 20px; /* 내부 여백 */
+
+    /* 메뉴와 하단 버튼을 분리하기 위해 flex 사용 */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.sidebar-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* 메뉴 아이템 간 간격 */
+}
+
+.sidebar-menu a {
+    display: block;
+    padding: 10px 15px;
+
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #333; /* 기본 텍스트 색상 */
+
+    border-radius: 8px;
+    text-decoration: none; /* header.css의 전역 a 스타일이 있다면 필요없음 */
+}
+
+.sidebar-menu a:hover {
+    background-color: #f5f5f5; /* 마우스 오버 시 배경색 */
+    text-decoration: none; /* 밑줄 제거 */
+}
+
+/* 사이드바 하단 버튼 (로그인/로그아웃 등) */
+.sidebar-user {
+    margin-top: 30px; /* 상단 메뉴와 간격 */
+}
+
+.sidebar-user .btn-login {
+    display: block;
+    width: 100%;
+    padding: 12px;
+
+    background-color: #000000; /* 헤더 테두리와 동일한 검은색 */
+    color: white;
+
+    font-size: 1rem;
+    font-weight: bold;
+    text-align: center;
+
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.sidebar-user .btn-login:hover {
+    opacity: 0.8;
+    text-decoration: none;
+}

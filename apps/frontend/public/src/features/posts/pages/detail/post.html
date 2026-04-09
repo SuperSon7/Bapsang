@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게시글</title>
+
+    <!-- Global & Layout CSS -->
+    <link rel="stylesheet" href="/global.css">
+    <link rel="stylesheet" href="/src/shared/component/header/header.css">
+    <link rel="stylesheet" href="/src/shared/component/footer/footer.css">
+
+    <!-- Page-specific CSS -->
+    <link rel="stylesheet" href="/src/features/posts/pages/detail/post.css">
+    <link rel="stylesheet" href="/src/shared/component/toast/toast.css">
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/lib/axios.min.js"></script>
+    <script src="/src/features/auth/authStore.js" defer></script>
+    <script type="module" src="/src/shared/component/toast/toast.js"></script>
+    <script type="module" src="/src/shared/component/layout.js" defer></script>
+    <script type="module" src="/src/features/posts/pages/detail/postDetail.js"></script>
+</head>
+<body>
+    <div id="header-placeholder"></div>
+
+    <main>
+        <div class="main-container">
+            <article class="post" id="post-container">
+            <!--JS로 동적 렌더링 -->
+
+                <header class="post-header">
+                    <h1 id="post-title" class="post-title"></h1>
+
+                    <div class="post-meta">
+                        <a href="#" class="post-author">
+                            <img src="/assets/images/user.png" alt="작성자 이미지" class="author-avatar">
+                            <div class="author-info">
+                                <span class="author-name" id="post-author-id"></span>
+                                <time class="post-date" id="post-date" datetime=""></time>
+                            </div>
+                        </a>
+
+                        <!--수정/삭제 케밥 메뉴 -->
+                        <div class="post-actions">
+                            <button type="button" class="post-more-btn" id="post-more-btn" style="display: none;">
+                                <i data-lucide="more-vertical"></i>
+                            </button>
+                            <ul class="post-more-menu" id="post-more-menu">
+                                <!-- JS로 동적 생성 -->
+                            </ul>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="post-content">
+                    <img src="" id="post-img" alt="">
+                    <p id="post-body"></p>
+                </div>
+
+                <div class="post-stats">
+                    <div class="stat-item post-likes-section">
+                        <button type="button" id="like-button" class="like-button">
+                            <i data-lucide="heart" class="like-icon"></i>
+                            <span class="like-text">좋아요</span>
+                        </button>
+                        <span class="stat-count" id="post-likes">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <i data-lucide="eye" class="stat-icon"></i>
+                        <span class="stat-count" id="post-views">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <i data-lucide="message-circle" class="stat-icon"></i>
+                        <span class="stat-count" id="post-comments">0</span>
+                    </div>
+                </div>
+
+                <section class="post-comment">
+                    <div class="comment-create">
+                        <input id="comment-input" placeholder="댓글을 입력하세요...">
+                        <button type="button" id="comment-submit-btn">등록</button>
+                    </div>
+
+                    <ul class="comment-list" id="comment-list"></ul>
+                </section>
+            </article>
+        </div>
+    </main>
+    
+    <div id="footer-placeholder"></div>
+
+    <!-- Template for a single comment -->
+    <template id="comment-template">
+        <li data-comment-id="" data-author-id="">
+            <div class="comment-header">
+                <a href="#" class="comment-author">
+                    <img src="/assets/images/user.png" alt="댓글 작성자 이미지">
+                    <span class="author-id" id="author-nickname"></span>
+                </a>
+                <time class="comment-date" datetime=""></time>
+            </div>
+            <div class="comment-content" id="comment-content">
+                <p></p>
+            </div>
+            <div class="comment-actions">
+                <button type="button" class="more-btn">⁝</button>
+                <ul class="more-menu">
+                    <li><button type="button" class="report-btn">신고</button></li>
+                </ul>
+            </div>
+            <ul class="reply-list"></ul>
+        </li>
+    </template>
+</body>
+</html>
