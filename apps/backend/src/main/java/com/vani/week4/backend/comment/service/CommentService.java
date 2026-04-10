@@ -104,6 +104,7 @@ public class CommentService {
     }
 
     //dto 변환 헬퍼메서드
+    // TODO 작성자 응답 변환 로직이 다른 도메인에서도 반복되면 Mapper 분리 검토
     private CommentResponse.Author toAuthor(User user) {
 
         String profileImageKey = user.getProfileImageKey();
@@ -174,7 +175,7 @@ public class CommentService {
                     .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
             //악의적인 오류 유발 댓글 방지
-            if(!parent.getId().equals(post.getId())){
+            if(!parent.getPost().getId().equals(post.getId())){
                 throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
             }
 
