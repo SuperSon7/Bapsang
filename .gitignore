@@ -58,3 +58,5 @@ bin/
 # Backend local artifacts
 *.rdb
 
+# docs
+comment-refactoring.md
