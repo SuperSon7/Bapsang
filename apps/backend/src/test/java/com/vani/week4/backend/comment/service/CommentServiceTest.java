@@ -2,13 +2,17 @@ package com.vani.week4.backend.comment.service;
 
 import com.vani.week4.backend.comment.dto.CommentCreateRequest;
 import com.vani.week4.backend.comment.dto.CommentResponse;
+import com.vani.week4.backend.comment.dto.CommentUpdateRequest;
+import com.vani.week4.backend.comment.dto.CommentUpdateResponse;
 import com.vani.week4.backend.comment.entity.Comment;
 import com.vani.week4.backend.comment.repository.CommentRepository;
 import com.vani.week4.backend.global.exception.InvalidCommentException;
 import com.vani.week4.backend.global.exception.PostNotFoundException;
+import com.vani.week4.backend.global.exception.UserAccessDeniedException;
 import com.vani.week4.backend.infra.S3.S3Service;
 import com.vani.week4.backend.post.entity.Post;
 import com.vani.week4.backend.post.repository.PostRepository;
+import com.vani.week4.backend.support.fixture.CommentFixture;
 import com.vani.week4.backend.support.fixture.PostFixture;
 import com.vani.week4.backend.support.fixture.UserFixture;
 import com.vani.week4.backend.user.entity.User;
@@ -45,11 +49,13 @@ class CommentServiceTest {
 
     private User user;
     private Post post;
+    private Comment comment;
 
     @BeforeEach
     void setUp() {
         user = UserFixture.user();
         post = PostFixture.post(user);
+        comment = CommentFixture.rootComment(post, user);
 
     }
 
@@ -160,25 +166,61 @@ class CommentServiceTest {
         verify(commentRepository, never()).save(any(Comment.class));
     }
 
+    @Test
     @DisplayName("댓글 생성 시 HTML을 escape 처리한다.")
     void createComment_escapesHtmlContent() {
+        //given
+        CommentCreateRequest request = new CommentCreateRequest(
+                "<script>alert('xss')</script>",
+                Optional.empty()
+        );
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+
+        //when
+        CommentResponse response = commentService.createComment(post.getId(), user, request);
+
+        //then
+        assertThat(response.content()).isEqualTo("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
+        assertThat(response.content()).doesNotContain("<script>");
     }
 
+    @Test
     @DisplayName("본인의 댓글을 수정할 수 있다.")
     void updateComment_byOwner_updatesContent() {
+        //given
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 댓글");
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        // when
+        CommentUpdateResponse response =
+                commentService.updateComment(post.getId(), comment.getId(), user, request);
+
+        // then
+        assertThat(response.id()).isEqualTo(comment.getId());
+        assertThat(response.content()).isEqualTo("수정된 댓글");
+        assertThat(comment.getContent()).isEqualTo("수정된 댓글");
+
     }
 
+    @Test
     @DisplayName("다른 사람의 댓글을 수정하면 예외가 발생한다.")
-    void updateComment_byOtherUser_throwsUnauthorizedException() {
+    void updateComment_byOtherUser_throwsUserAccessDeniedException() {
+        //given
+        User otherUser = UserFixture.user("otherUser1", "바나나");
+        Comment otherComment = CommentFixture.rootComment(post, otherUser);
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 댓글");
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(otherComment.getId())).thenReturn(Optional.of(otherComment));
+
+        //when & then
+        assertThatThrownBy(() -> commentService.updateComment(post.getId(), otherComment.getId(), user, request)
+        ).isInstanceOf(UserAccessDeniedException.class);
+
+        verify(commentRepository, never()).save(any(Comment.class));
     }
 
-    @DisplayName("본인의 댓글을 삭제할 수 있다.")
-    void deleteComment_byOwner_deletesComment() {
-
-    }
-
-    @DisplayName("다른 사람의 댓글을 삭제하면 예외가 발생한다.")
-    void deleteComment_byOtherUser_throwsUnauthorizedException() {
-
-    }
 }
