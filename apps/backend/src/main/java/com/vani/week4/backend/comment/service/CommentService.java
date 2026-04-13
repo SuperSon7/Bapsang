@@ -231,7 +231,7 @@ public class CommentService {
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
         if (!comment.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+            throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
         }
 
         comment.updateContent(HtmlUtils.htmlEscape(request.content()));
@@ -259,7 +259,7 @@ public class CommentService {
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
         if (!comment.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+            throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
         }
         commentRepository.delete(comment);
         post.decreaseCommentCount();
