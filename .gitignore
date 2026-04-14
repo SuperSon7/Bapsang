@@ -9,6 +9,7 @@ Desktop.ini
 # Editor settings
 .idea/
 .vscode/
+.codex
 *.iml
 *.ipr
 *.iws
