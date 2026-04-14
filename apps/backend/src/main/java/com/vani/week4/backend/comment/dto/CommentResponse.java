@@ -1,5 +1,7 @@
 package com.vani.week4.backend.comment.dto;
 
+import com.vani.week4.backend.comment.entity.CommentStatus;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -15,6 +17,7 @@ public record CommentResponse(
         LocalDateTime createdAt,
         Integer depth,
         Author author,
+        CommentStatus status,
         //대댓글 리스트
         List<CommentResponse> replies,
         //더 있는지

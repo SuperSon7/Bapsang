@@ -36,6 +36,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
 public class CommentService {
+    private static final String DELETED_COMMENT_CONTENT = "삭제된 댓글입니다.";
+
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
     private final S3Service s3Service;
@@ -92,11 +94,12 @@ public class CommentService {
         return new CommentResponse(
                 comment.getId(),
                 comment.getParentId(),
-                comment.getContent(),
+                contentOf(comment),
                 comment.getCommentGroup(),
                 comment.getCreatedAt(),
                 comment.getDepth(),
-                toAuthor(comment.getUser()),
+                toAuthor(comment),
+                comment.getCommentStatus(),
                 replyResponses,
                 false,
                 replies.size()
@@ -105,7 +108,12 @@ public class CommentService {
 
     //dto 변환 헬퍼메서드
     // TODO 작성자 응답 변환 로직이 다른 도메인에서도 반복되면 Mapper 분리 검토
-    private CommentResponse.Author toAuthor(User user) {
+    private CommentResponse.Author toAuthor(Comment comment) {
+        if (comment.isDeleted()) {
+            return null;
+        }
+
+        User user = comment.getUser();
 
         String profileImageKey = user.getProfileImageKey();
         String authorProfileUrl = null;
@@ -131,7 +139,7 @@ public class CommentService {
 
         //가져온 댓글들을 CommentResponse로 변환
         for (Comment reply : replies){
-            CommentResponse response = toCommentWithReplies(reply);
+            CommentResponse response = toCommentResponse(reply);
             commentMap.put(reply.getId(), response);
         }
 
@@ -207,15 +215,24 @@ public class CommentService {
         return new CommentResponse(
                 comment.getId(),
                 comment.getParentId(),
-                comment.getContent(),
+                contentOf(comment),
                 comment.getCommentGroup(),
                 comment.getCreatedAt(),
                 comment.getDepth(),
-                toAuthor(comment.getUser()),
+                toAuthor(comment),
+                comment.getCommentStatus(),
                 new ArrayList<>(),  // 대댓글 리스트 (생성 시에는 빈 배열)
                 false,              // 더 불러올 대댓글 없음
                 0                   // 대댓글 개수 0
         );
+    }
+
+    private String contentOf(Comment comment) {
+        if (comment.isDeleted()) {
+            return DELETED_COMMENT_CONTENT;
+        }
+
+        return comment.getContent();
     }
 
     /**
@@ -229,6 +246,14 @@ public class CommentService {
 
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!comment.getPost().getId().equals(postId)) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
+        }
+
+        if (comment.isDeleted()) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
+        }
 
         if (!comment.getUser().getId().equals(user.getId())) {
             throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
@@ -258,11 +283,17 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
+        if (!comment.getPost().getId().equals(postId)) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
+        }
+
         if (!comment.getUser().getId().equals(user.getId())) {
             throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
         }
-        commentRepository.delete(comment);
-        post.decreaseCommentCount();
+        if (!comment.isDeleted()) {
+            comment.softDelete();
+            comment.getPost().decreaseCommentCount();
+        }
     }
 
 }

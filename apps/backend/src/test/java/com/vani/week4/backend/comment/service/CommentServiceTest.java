@@ -5,7 +5,9 @@ import com.vani.week4.backend.comment.dto.CommentResponse;
 import com.vani.week4.backend.comment.dto.CommentUpdateRequest;
 import com.vani.week4.backend.comment.dto.CommentUpdateResponse;
 import com.vani.week4.backend.comment.entity.Comment;
+import com.vani.week4.backend.comment.entity.CommentStatus;
 import com.vani.week4.backend.comment.repository.CommentRepository;
+import com.vani.week4.backend.global.dto.SliceResponse;
 import com.vani.week4.backend.global.exception.InvalidCommentException;
 import com.vani.week4.backend.global.exception.PostNotFoundException;
 import com.vani.week4.backend.global.exception.UserAccessDeniedException;
@@ -24,7 +26,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -79,6 +84,7 @@ class CommentServiceTest {
         assertThat(response.depth()).isEqualTo(0);
         assertThat(response.parentId()).isNull();
         assertThat(response.author().nickname()).isEqualTo("바닐라");
+        assertThat(response.status()).isEqualTo(CommentStatus.ACTIVE);
 
         verify(commentRepository).save(any(Comment.class));
         assertThat(post.getCommentCount()).isEqualTo(1);
@@ -221,6 +227,140 @@ class CommentServiceTest {
         ).isInstanceOf(UserAccessDeniedException.class);
 
         verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("삭제된 댓글은 수정할 수 없다.")
+    void updateComment_whenDeleted_throwsInvalidCommentException() {
+        //given
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 댓글");
+        comment.softDelete();
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        //when & then
+        assertThatThrownBy(() -> commentService.updateComment(post.getId(), comment.getId(), user, request)
+        ).isInstanceOf(InvalidCommentException.class);
+
+        verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("루트 댓글과 대댓글을 트리 구조로 조회한다.")
+    void getComments_returnsRepliesAsTree() {
+        //given
+        Comment reply = comment("comment-2", comment.getId(), 1, comment.getCommentGroup(), "대댓글");
+        Comment nestedReply = comment("comment-3", reply.getId(), 2, comment.getCommentGroup(), "대대댓글");
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
+                .thenReturn(new SliceImpl<>(List.of(comment), PageRequest.of(0, 10), false));
+        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup()))
+                .thenReturn(List.of(reply, nestedReply));
+
+        //when
+        SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 10);
+
+        //then
+        CommentResponse rootResponse = response.items().getFirst();
+        assertThat(rootResponse.commentId()).isEqualTo(comment.getId());
+        assertThat(rootResponse.replies()).hasSize(1);
+        assertThat(rootResponse.replyCount()).isEqualTo(2);
+
+        CommentResponse replyResponse = rootResponse.replies().getFirst();
+        assertThat(replyResponse.commentId()).isEqualTo(reply.getId());
+        assertThat(replyResponse.parentId()).isEqualTo(comment.getId());
+        assertThat(replyResponse.replies()).hasSize(1);
+        assertThat(replyResponse.replies().getFirst().commentId()).isEqualTo(nestedReply.getId());
+    }
+
+    @Test
+    @DisplayName("다음 페이지가 있으면 마지막 댓글 기준으로 다음 커서를 응답한다.")
+    void getComments_whenHasNext_setsNextCursor() {
+        //given
+        Comment nextCursorComment = comment("comment-2", null, 0, "comment-2", "두 번째 댓글");
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 2)))
+                .thenReturn(new SliceImpl<>(List.of(comment, nextCursorComment), PageRequest.of(0, 2), true));
+        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup())).thenReturn(List.of());
+        when(commentRepository.findRepliesByCommentGroup(nextCursorComment.getCommentGroup())).thenReturn(List.of());
+
+        //when
+        SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 2);
+
+        //then
+        assertThat(response.hasMore()).isTrue();
+        assertThat(response.nextCursor()).isNotNull();
+        assertThat(response.nextCursor().id()).isEqualTo(nextCursorComment.getId());
+        assertThat(response.nextCursor().createdAt()).isEqualTo(nextCursorComment.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("본인의 댓글을 소프트 삭제하고 활성 댓글 수를 줄인다.")
+    void deleteComment_byOwner_softDeletesAndDecreasesActiveCommentCount() {
+        //given
+        post.incrementCommentCount();
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        //when
+        commentService.deleteComment(post.getId(), comment.getId(), user);
+
+        //then
+        assertThat(comment.getCommentStatus()).isEqualTo(CommentStatus.DELETED);
+        assertThat(comment.getDeletedAt()).isNotNull();
+        assertThat(post.getCommentCount()).isEqualTo(0);
+        verify(commentRepository, never()).delete(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("이미 삭제된 댓글은 다시 댓글 수를 줄이지 않는다.")
+    void deleteComment_whenAlreadyDeleted_doesNotDecreaseCountAgain() {
+        //given
+        comment.softDelete();
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        //when
+        commentService.deleteComment(post.getId(), comment.getId(), user);
+
+        //then
+        assertThat(post.getCommentCount()).isEqualTo(0);
+        verify(commentRepository, never()).delete(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("삭제된 댓글은 내용과 작성자를 마스킹하고 삭제 상태를 응답한다.")
+    void getComments_withDeletedComment_masksContentAndAuthor() {
+        //given
+        comment.softDelete();
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
+                .thenReturn(new SliceImpl<>(List.of(comment), PageRequest.of(0, 10), false));
+        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup())).thenReturn(List.of());
+
+        //when
+        SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 10);
+
+        //then
+        CommentResponse deletedComment = response.items().getFirst();
+        assertThat(deletedComment.content()).isEqualTo("삭제된 댓글입니다.");
+        assertThat(deletedComment.author()).isNull();
+        assertThat(deletedComment.status()).isEqualTo(CommentStatus.DELETED);
+    }
+
+    private Comment comment(String id, String parentId, int depth, String commentGroup, String content) {
+        return Comment.builder()
+                .id(id)
+                .post(post)
+                .user(user)
+                .parentId(parentId)
+                .depth(depth)
+                .commentGroup(commentGroup)
+                .content(content)
+                .build();
     }
 
 }

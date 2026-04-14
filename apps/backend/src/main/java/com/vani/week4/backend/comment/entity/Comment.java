@@ -77,4 +77,8 @@ public class Comment {
         this.commentStatus = CommentStatus.DELETED;
     }
 
+    public boolean isDeleted() {
+        return this.commentStatus == CommentStatus.DELETED;
+    }
+
 }
