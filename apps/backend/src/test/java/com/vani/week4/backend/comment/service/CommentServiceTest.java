@@ -8,7 +8,9 @@ import com.vani.week4.backend.comment.entity.Comment;
 import com.vani.week4.backend.comment.entity.CommentStatus;
 import com.vani.week4.backend.comment.repository.CommentRepository;
 import com.vani.week4.backend.global.dto.SliceResponse;
+import com.vani.week4.backend.global.exception.CommentNotFoundException;
 import com.vani.week4.backend.global.exception.InvalidCommentException;
+import com.vani.week4.backend.global.exception.MaxDepthExceededException;
 import com.vani.week4.backend.global.exception.PostNotFoundException;
 import com.vani.week4.backend.global.exception.UserAccessDeniedException;
 import com.vani.week4.backend.infra.S3.S3Service;
@@ -23,7 +25,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
@@ -49,7 +50,6 @@ class CommentServiceTest {
     @Mock
     private S3Service s3Service;
 
-    @InjectMocks
     private CommentService commentService;
 
     private User user;
@@ -61,6 +61,11 @@ class CommentServiceTest {
         user = UserFixture.user();
         post = PostFixture.post(user);
         comment = CommentFixture.rootComment(post, user);
+        commentService = new CommentService(
+                commentRepository,
+                postRepository,
+                new CommentTreeAssembler(s3Service)
+        );
 
     }
 
@@ -173,6 +178,53 @@ class CommentServiceTest {
     }
 
     @Test
+    @DisplayName("존재하지 않는 댓글을 부모로 지정하면 예외가 발생한다.")
+    void createComment_withMissingParentComment_throwsCommentNotFoundException() {
+        // given
+        CommentCreateRequest request = new CommentCreateRequest(
+                "없는 부모 댓글에 대댓글 달기",
+                Optional.of("missing-parent-comment-id")
+        );
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById("missing-parent-comment-id")).thenReturn(Optional.empty());
+
+        // when & then
+        // TODO: 컨트롤러/API 테스트에서는 이 예외가 기대한 HTTP 상태와 에러 바디로 변환되는지도 확인한다.
+        assertThatThrownBy(() -> commentService.createComment(post.getId(), user, request))
+                .isInstanceOf(CommentNotFoundException.class);
+
+        verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("허용 깊이를 초과하는 대댓글 생성은 예외가 발생한다.")
+    void createComment_whenParentDepthExceedsLimit_throwsMaxDepthExceededException() {
+        // given
+        Comment deepParentComment = comment(
+                "deep-parent-comment-id",
+                "parent-comment-id",
+                3,
+                comment.getCommentGroup(),
+                "깊은 댓글"
+        );
+        CommentCreateRequest request = new CommentCreateRequest(
+                "깊이 제한 초과 대댓글",
+                Optional.of(deepParentComment.getId())
+        );
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findById(deepParentComment.getId())).thenReturn(Optional.of(deepParentComment));
+
+        // when & then
+        // TODO: 댓글 최대 depth 정책이 확정되면 경계값(depth 2 허용, depth 3 차단)을 함께 고정한다.
+        assertThatThrownBy(() -> commentService.createComment(post.getId(), user, request))
+                .isInstanceOf(MaxDepthExceededException.class);
+
+        verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
     @DisplayName("댓글 생성 시 HTML을 escape 처리한다.")
     void createComment_escapesHtmlContent() {
         //given
@@ -256,7 +308,7 @@ class CommentServiceTest {
         when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
         when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
                 .thenReturn(new SliceImpl<>(List.of(comment), PageRequest.of(0, 10), false));
-        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup()))
+        when(commentRepository.findRepliesByCommentGroupIn(List.of(comment.getCommentGroup())))
                 .thenReturn(List.of(reply, nestedReply));
 
         //when
@@ -276,6 +328,50 @@ class CommentServiceTest {
     }
 
     @Test
+    @DisplayName("루트 댓글이 없으면 대댓글 조회를 하지 않는다.")
+    void getComments_withoutRootComments_doesNotFetchReplies() {
+        // given
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
+                .thenReturn(new SliceImpl<>(List.of(), PageRequest.of(0, 10), false));
+
+        // when
+        SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 10);
+
+        // then
+        assertThat(response.items()).isEmpty();
+        verify(commentRepository, never()).findRepliesByCommentGroupIn(anyList());
+    }
+
+    @Test
+    @DisplayName("여러 루트 댓글의 대댓글을 한 번에 조회해 각 루트 댓글에 조립한다.")
+    void getComments_fetchesRepliesForCurrentPageInSingleQuery() {
+        // given
+        Comment nextRootComment = comment("comment-4", null, 0, "comment-4", "두 번째 루트 댓글");
+        Comment firstRootReply = comment("comment-2", comment.getId(), 1, comment.getCommentGroup(), "첫 번째 루트의 대댓글");
+        Comment secondRootReply = comment("comment-5", nextRootComment.getId(), 1, nextRootComment.getCommentGroup(), "두 번째 루트의 대댓글");
+        List<String> commentGroups = List.of(comment.getCommentGroup(), nextRootComment.getCommentGroup());
+
+        when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
+        when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
+                .thenReturn(new SliceImpl<>(List.of(comment, nextRootComment), PageRequest.of(0, 10), false));
+        when(commentRepository.findRepliesByCommentGroupIn(commentGroups))
+                .thenReturn(List.of(firstRootReply, secondRootReply));
+
+        // when
+        SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 10);
+
+        // then
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items().get(0).replies()).extracting(CommentResponse::commentId)
+                .containsExactly(firstRootReply.getId());
+        assertThat(response.items().get(1).replies()).extracting(CommentResponse::commentId)
+                .containsExactly(secondRootReply.getId());
+
+        verify(commentRepository).findRepliesByCommentGroupIn(commentGroups);
+    }
+
+    @Test
     @DisplayName("다음 페이지가 있으면 마지막 댓글 기준으로 다음 커서를 응답한다.")
     void getComments_whenHasNext_setsNextCursor() {
         //given
@@ -284,8 +380,8 @@ class CommentServiceTest {
         when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
         when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 2)))
                 .thenReturn(new SliceImpl<>(List.of(comment, nextCursorComment), PageRequest.of(0, 2), true));
-        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup())).thenReturn(List.of());
-        when(commentRepository.findRepliesByCommentGroup(nextCursorComment.getCommentGroup())).thenReturn(List.of());
+        when(commentRepository.findRepliesByCommentGroupIn(List.of(comment.getCommentGroup(), nextCursorComment.getCommentGroup())))
+                .thenReturn(List.of());
 
         //when
         SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 2);
@@ -339,7 +435,7 @@ class CommentServiceTest {
         when(postRepository.findById(post.getId())).thenReturn(Optional.of(post));
         when(commentRepository.findTopLevelComments(post.getId(), null, null, PageRequest.of(0, 10)))
                 .thenReturn(new SliceImpl<>(List.of(comment), PageRequest.of(0, 10), false));
-        when(commentRepository.findRepliesByCommentGroup(comment.getCommentGroup())).thenReturn(List.of());
+        when(commentRepository.findRepliesByCommentGroupIn(List.of(comment.getCommentGroup()))).thenReturn(List.of());
 
         //when
         SliceResponse<CommentResponse> response = commentService.getComments(post.getId(), null, null, 10);
