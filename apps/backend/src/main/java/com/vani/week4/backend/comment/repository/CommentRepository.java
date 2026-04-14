@@ -34,11 +34,13 @@ public interface CommentRepository extends JpaRepository<Comment,String> {
             Pageable pageable
             );
 
-    // 현재 페이지의 루트 댓글들에 속한 대댓글을 한 번에 가져옴
+    // 동일 CommentGroup의 댓글 모음 가져오기
+    // commentGroup이 루트댓글들의 아이디이므로 루트댓글을 제외한 글들을 가져옴
+    // 최근에 달릴수록 최초 댓글에서 멀리 있으니까 오름차순(오래된순) 정렬
     @Query( "SELECT c FROM Comment c " +
             "JOIN FETCH c.user " +
-            "WHERE c.commentGroup IN :commentGroups " +
-            "AND c.parentId IS NOT NULL " +
-            "ORDER BY c.commentGroup ASC, c.createdAt ASC")
-    List<Comment> findRepliesByCommentGroupIn(@Param("commentGroups") List<String> commentGroups);
+            "WHERE c.commentGroup = :commentGroup " +
+            "AND c.id != :commentGroup " +
+            "ORDER BY c.createdAt ASC")
+    List<Comment> findRepliesByCommentGroup(@Param("commentGroup") String commentGroup);
 }
