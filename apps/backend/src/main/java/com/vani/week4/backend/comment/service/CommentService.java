@@ -10,7 +10,6 @@ import com.vani.week4.backend.comment.repository.CommentRepository;
 import com.vani.week4.backend.global.ErrorCode;
 import com.vani.week4.backend.global.dto.SliceResponse;
 import com.vani.week4.backend.global.exception.*;
-import com.vani.week4.backend.infra.S3.S3Service;
 import com.vani.week4.backend.post.entity.Post;
 import com.vani.week4.backend.post.repository.PostRepository;
 import com.vani.week4.backend.user.entity.User;
@@ -24,10 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author vani
@@ -38,7 +36,7 @@ import java.util.Map;
 public class CommentService {
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
-    private final S3Service s3Service;
+    private final CommentTreeAssembler commentTreeAssembler;
 
     /**
      * 댓글 조회 메서드,커서 기반 페이징
@@ -52,14 +50,18 @@ public class CommentService {
         postRepository.findById(postId)
                 .orElseThrow(() -> new PostNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        //정렬된 최상위(최신 작성, id큰 순) 댓글들 가져오기
+        // 정렬된 최상위 댓글을 먼저 조회하고, 현재 페이지 루트 댓글의 대댓글만 별도로 일괄 조회한다.
         Pageable pageable = PageRequest.of(0, size);
         Slice<Comment> topLevelComments = commentRepository.findTopLevelComments(postId, cursorCreatedAt, cursorId, pageable);
+        List<Comment> rootComments = topLevelComments.getContent();
+        Map<String, List<Comment>> repliesByCommentGroup = findRepliesByCommentGroup(rootComments);
 
-        // 슬라이스에서 리스트 꺼내고 리스트를 스트림으로 변환해서(함수형연산 가능하게)
-        // toCommentWithReplies로 CommentResponse로 변환후 다시 리스트로 변환
-        List<CommentResponse> responses = topLevelComments.getContent().stream()
-                .map(this::toCommentWithReplies)
+        // 루트 댓글마다 대댓글을 다시 조회하지 않고, commentGroup 기준으로 미리 묶어둔 결과를 조립한다.
+        List<CommentResponse> responses = rootComments.stream()
+                .map(comment -> commentTreeAssembler.toCommentWithReplies(
+                        comment,
+                        repliesByCommentGroup.getOrDefault(comment.getCommentGroup(), List.of())
+                ))
                 .toList();
 
         // 다음 커서 생성, 더보기 버튼
@@ -76,82 +78,18 @@ public class CommentService {
         return new SliceResponse<CommentResponse>(responses, nextCursor, topLevelComments.hasNext());
     }
 
-    /**comment 형태의 댓글을 CommentResponse의 형태로 변환하는 메서드,
-     * CommentGroup이용해서 같은 그룹의 댓글들을 불러오고,
-     * 트리구조 형성과 대댓글 리스트, hasmore, replucount를 알맞게 넣어서 반환
-     * @param comment : 쿼리를 통해 가져온 댓글
-     * @return : 같은 그룹내의 트리구조가 형성된 CommentResponse 반환
-     */
-    private CommentResponse toCommentWithReplies(Comment comment){
-        //같은 그룹의 댓글들 리스트(최상위 루트댓글 제외)
-        List<Comment> replies =
-                commentRepository.findRepliesByCommentGroup(comment.getCommentGroup());
-        //리스트를 순회해서 트리구조의 CommentResponse형태의 리스트(여기서 최상위 = 실제 대댓글)
-        List<CommentResponse> replyResponses = buildReplyTree(replies);
-
-        return new CommentResponse(
-                comment.getId(),
-                comment.getParentId(),
-                comment.getContent(),
-                comment.getCommentGroup(),
-                comment.getCreatedAt(),
-                comment.getDepth(),
-                toAuthor(comment.getUser()),
-                replyResponses,
-                false,
-                replies.size()
-        );
-    }
-
-    //dto 변환 헬퍼메서드
-    private CommentResponse.Author toAuthor(User user) {
-
-        String profileImageKey = user.getProfileImageKey();
-        String authorProfileUrl = null;
-
-        if (profileImageKey != null && !profileImageKey.isBlank()) {
-            authorProfileUrl = s3Service.createPresignedGetUrl(profileImageKey);
+    private Map<String, List<Comment>> findRepliesByCommentGroup(List<Comment> rootComments) {
+        if (rootComments.isEmpty()) {
+            return Map.of();
         }
 
-        return new CommentResponse.Author(
-                user.getNickname(),
-                authorProfileUrl
-        );
-    }
+        // 현재 페이지에 포함된 루트 댓글 그룹만 대상으로 조회해서 루트 수만큼 쿼리하는 N+1을 피한다.
+        List<String> commentGroups = rootComments.stream()
+                .map(Comment::getCommentGroup)
+                .toList();
 
-    /**댓글들을 순회하면서 댓글의 트리구조를 만들어주는 메서드
-     *
-     * @param replies : CommentGroup이 동일한 댓글들 리스트(루트제외)
-     * @return firstLevelReplies : 트리구조를 가진 최상위 대댓글 리스트
-     */
-    private List<CommentResponse> buildReplyTree(List<Comment> replies){
-        Map<String, CommentResponse> commentMap = new HashMap<>();
-        List<CommentResponse> firstLevelReplies = new ArrayList<>();
-
-        //가져온 댓글들을 CommentResponse로 변환
-        for (Comment reply : replies){
-            CommentResponse response = toCommentWithReplies(reply);
-            commentMap.put(reply.getId(), response);
-        }
-
-        //트리구조 형성
-        for (Comment reply : replies){
-            CommentResponse response = commentMap.get(reply.getId());
-            if (reply.getDepth() == 1) {
-                //최상위 대댓글
-                firstLevelReplies.add(response);
-            } else if (reply.getDepth() > 1) {
-                //2이상의 깊이는 부모의 replies에 추가
-                //replies : CommentResponse의 필드
-                String parentId = reply.getParentId();
-                CommentResponse parent = commentMap.get(parentId);
-                if (parent != null) {
-                    parent.replies().add(response);
-                }
-            }
-        }
-
-        return firstLevelReplies;
+        return commentRepository.findRepliesByCommentGroupIn(commentGroups).stream()
+                .collect(Collectors.groupingBy(Comment::getCommentGroup));
     }
 
     /**
@@ -174,7 +112,7 @@ public class CommentService {
                     .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
             //악의적인 오류 유발 댓글 방지
-            if(!parent.getId().equals(post.getId())){
+            if(!parent.getPost().getId().equals(post.getId())){
                 throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
             }
 
@@ -199,22 +137,7 @@ public class CommentService {
         //TODO Count로직 개선하기
         post.incrementCommentCount();
 
-        return toCommentResponse(comment);
-    }
-
-    private CommentResponse toCommentResponse(Comment comment){
-        return new CommentResponse(
-                comment.getId(),
-                comment.getParentId(),
-                comment.getContent(),
-                comment.getCommentGroup(),
-                comment.getCreatedAt(),
-                comment.getDepth(),
-                toAuthor(comment.getUser()),
-                new ArrayList<>(),  // 대댓글 리스트 (생성 시에는 빈 배열)
-                false,              // 더 불러올 대댓글 없음
-                0                   // 대댓글 개수 0
-        );
+        return commentTreeAssembler.toCommentResponse(comment);
     }
 
     /**
@@ -229,8 +152,16 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
+        if (!comment.getPost().getId().equals(postId)) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
+        }
+
+        if (comment.isDeleted()) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
+        }
+
         if (!comment.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+            throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
         }
 
         comment.updateContent(HtmlUtils.htmlEscape(request.content()));
@@ -257,11 +188,17 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CommentNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        if (!comment.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED);
+        if (!comment.getPost().getId().equals(postId)) {
+            throw new InvalidCommentException(ErrorCode.INVALID_INPUT);
         }
-        commentRepository.delete(comment);
-        post.decreaseCommentCount();
+
+        if (!comment.getUser().getId().equals(user.getId())) {
+            throw new UserAccessDeniedException(ErrorCode.FORBIDDEN);
+        }
+        if (!comment.isDeleted()) {
+            comment.softDelete();
+            comment.getPost().decreaseCommentCount();
+        }
     }
 
 }
