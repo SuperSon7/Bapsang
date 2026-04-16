@@ -42,6 +42,13 @@ Use this when fixing bugs or refactoring behavior-heavy code.
 
 For a concrete example, see `docs/agent/examples/comment-refactoring.md`.
 
+## Test Data Rules
+
+- Reuse existing fixtures for repeated domain entities such as `User`, `Post`, and `Comment`.
+- Add or extend fixtures when the same entity setup appears in multiple tests or hides irrelevant constructor noise.
+- Do not force fixtures around simple mocks, primitive values, Redis keys, or one-off stub responses.
+- Prefer tests that keep setup readable at the call site; if a fixture makes the test harder to read, simplify or skip it.
+
 ## Refactoring Workflow
 
 Use this when improving coupling, cohesion, or readability.

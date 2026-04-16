@@ -8,6 +8,10 @@ group = 'com.vani.week4'
 version = '0.0.1-SNAPSHOT'
 description = 'backend'
 
+def localOnlyExcludes = [
+        "docs/roadmaps/**"
+]
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -16,10 +20,16 @@ java {
 
 jar {
     enabled = false
+    localOnlyExcludes.each { exclude it }
 }
 
 bootJar {
     duplicatesStrategy = 'exclude'
+    localOnlyExcludes.each { exclude it }
+}
+
+processResources {
+    localOnlyExcludes.each { exclude it }
 }
 
 test {

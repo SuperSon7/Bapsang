@@ -2,7 +2,7 @@ import { renderPost, setupPostActionListeners } from '/src/features/posts/pages/
 import { getPost, getPosts} from "/src/features/posts/api/postApi.js";
 import { createComment, getComments } from "/src/features/comments/api/commentsApi.js";
 import { handleCommentClick, renderComment, setupCommentForm } from "/src/features/posts/pages/detail/commentSection.js";
-import { like } from "/src/features/posts/api/interactionApi.js";
+import { like, unlike } from "/src/features/posts/api/interactionApi.js";
 document.addEventListener("DOMContentLoaded", function (){
 
     const currentLoggedInUserID="postAuthorID";
@@ -48,7 +48,7 @@ function setupLikeButton(postId, isLiked, likeCount) {
             if (currentIsLiked) {
                 await like(postId);
             } else {
-                await like(postId);
+                await unlike(postId);
             }
 
         } catch(error) {
@@ -150,4 +150,3 @@ async function initPage() {
 }
 
 initPage();
-

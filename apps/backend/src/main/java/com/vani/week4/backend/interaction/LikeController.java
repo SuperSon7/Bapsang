@@ -5,8 +5,6 @@ import com.vani.week4.backend.interaction.service.LikeService;
 import com.vani.week4.backend.user.entity.User;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,12 +18,25 @@ import org.springframework.web.bind.annotation.*;
 public class LikeController {
     private final LikeService likeService;
 
-    //게시글 좋아요 토글 시
-    @PostMapping
-    public ResponseEntity<Void> postLikeToggle(
+    /**
+     * 게시글에 좋아요를 추가합니다.
+     */
+    @PutMapping
+    public ResponseEntity<Void> likePost(
             @CurrentUser User user,
             @PathVariable String postId) {
-        likeService.toggleLike(user, postId);
+        likeService.likePost(user, postId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 게시글 좋아요를 취소합니다.
+     */
+    @DeleteMapping
+    public ResponseEntity<Void> unlikePost(
+            @CurrentUser User user,
+            @PathVariable String postId) {
+        likeService.unlikePost(user, postId);
         return ResponseEntity.noContent().build();
     }
 }

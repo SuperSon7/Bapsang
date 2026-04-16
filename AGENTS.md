@@ -55,6 +55,8 @@ Working directory: `apps/frontend`
 
 - Follow the existing code style in each app before introducing new patterns.
 - Keep comments short and useful.
+- Add documentation comments to classes and functions in touched code.
+- Add inline comments only when they materially help explain non-obvious logic or constraints.
 - Avoid mixing unrelated refactors with feature or bug-fix work.
 - Prefer readable, explicit code over clever abstractions.
 
