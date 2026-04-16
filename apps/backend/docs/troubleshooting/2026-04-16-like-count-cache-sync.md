@@ -51,12 +51,24 @@
 - Rationale:
   sync 경로의 예외 처리 규칙을 테스트하기 쉬워지고, 나중에 수동 실행이나 다른 배치 진입점이 생겨도 재사용 가능하다.
 
+### Decision 4: 좋아요 API 를 명시적 like/unlike 로 전환
+
+- Choice:
+  `POST toggle` 대신 `PUT /likes` 와 `DELETE /likes` 로 최종 상태를 직접 표현하도록 바꿨다.
+- Alternatives:
+  기존 toggle API 를 유지하고 프론트에서 중복 클릭만 억제하는 방법.
+- Tradeoffs:
+  프론트 호출부도 함께 바꿔야 하고, 기존 API 계약을 쓰는 클라이언트가 있다면 같이 업데이트해야 한다.
+- Rationale:
+  재시도와 중복 요청에서 최종 상태가 예측 가능해야 한다. toggle 은 요청이 두 번 오면 상태가 다시 뒤집히지만, explicit like/unlike 는 같은 요청이 반복돼도 같은 상태를 유지한다.
+
 ## Implementation Summary
 
 - [LikeService.java](/home/vanillab/Bapsang/apps/backend/src/main/java/com/vani/week4/backend/interaction/service/LikeService.java) 에서 RedisTemplate 의존성을 제거하고 토글 유스케이스만 남겼다.
 - [LikeCountCache.java](/home/vanillab/Bapsang/apps/backend/src/main/java/com/vani/week4/backend/interaction/service/LikeCountCache.java) 를 추가해 count 조회, 캐시 미스 복구, 증감, key 조회를 모았다.
 - [LikeCountSynchronizer.java](/home/vanillab/Bapsang/apps/backend/src/main/java/com/vani/week4/backend/post/batch/LikeCountSynchronizer.java) 를 추가해 key 순회와 DB 반영을 분리했다.
 - [LikeSyncScheduler.java](/home/vanillab/Bapsang/apps/backend/src/main/java/com/vani/week4/backend/post/batch/LikeSyncScheduler.java) 는 synchronizer 호출만 하도록 단순화했다.
+- [LikeController.java](/home/vanillab/Bapsang/apps/backend/src/main/java/com/vani/week4/backend/interaction/LikeController.java) 와 프론트 interaction API 를 `PUT/DELETE` 기반으로 바꿨다.
 - [LikeCountCacheTest.java](/home/vanillab/Bapsang/apps/backend/src/test/java/com/vani/week4/backend/interaction/service/LikeCountCacheTest.java), [LikeServiceTest.java](/home/vanillab/Bapsang/apps/backend/src/test/java/com/vani/week4/backend/interaction/service/LikeServiceTest.java), [LikeCountSynchronizerTest.java](/home/vanillab/Bapsang/apps/backend/src/test/java/com/vani/week4/backend/post/batch/LikeCountSynchronizerTest.java) 를 추가했다.
 
 명시적으로 제외한 작업:
@@ -73,6 +85,8 @@
   - 결과: `7/7` 통과
 - `./gradlew test --tests 'com.vani.week4.backend.post.PostServiceTest'`
   - 결과: `4/4` 통과
+- `./gradlew test --tests 'com.vani.week4.backend.interaction.service.LikeCountCacheTest' --tests 'com.vani.week4.backend.interaction.service.LikeServiceTest' --tests 'com.vani.week4.backend.post.batch.LikeCountSynchronizerTest' --tests 'com.vani.week4.backend.post.PostServiceTest'`
+  - 결과: `11/11` 통과
 
 검증 중 보인 점:
 
@@ -82,6 +96,7 @@
 ## Follow-ups
 
 - 실제 Redis 와 JPA 를 함께 쓰는 통합 테스트를 추가해 scheduler 실행 전후 DB `likeCount` 수렴 여부를 확인할 것.
+- write-behind 는 당장 count 캐시 최적화로 도입하지 말고, 먼저 DB 를 source of truth 로 유지한 상태에서 명시적 상태 전환과 동시성 테스트를 확보할 것.
 - `keys` 기반 전체 스캔이 운영 트래픽에 맞는지 확인하고, 필요하면 cursor 기반 순회나 dirty-set 전략으로 바꿀 것.
 - 없는 게시글에 대한 캐시 키가 오래 남을 수 있으므로 정리 정책을 별도로 정할 것.
 

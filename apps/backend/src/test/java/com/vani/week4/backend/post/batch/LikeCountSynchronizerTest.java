@@ -1,9 +1,10 @@
 package com.vani.week4.backend.post.batch;
 
-import com.github.f4b6a3.ulid.UlidCreator;
 import com.vani.week4.backend.interaction.service.LikeCountCache;
 import com.vani.week4.backend.post.entity.Post;
 import com.vani.week4.backend.post.repository.PostRepository;
+import com.vani.week4.backend.support.fixture.PostFixture;
+import com.vani.week4.backend.support.fixture.UserFixture;
 import com.vani.week4.backend.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,16 +42,8 @@ class LikeCountSynchronizerTest {
 
     @BeforeEach
     void setUp() {
-        User user = User.createUser(
-                UlidCreator.getUlid().toString(),
-                "tester",
-                "profile-image-key"
-        );
-        post = Post.builder()
-                .id("post-1")
-                .user(user)
-                .title("title")
-                .build();
+        User user = UserFixture.user("user-1", "tester");
+        post = PostFixture.post("post-1", user);
     }
 
     /**

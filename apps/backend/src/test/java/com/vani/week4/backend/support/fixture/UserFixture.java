@@ -6,10 +6,14 @@ public class UserFixture {
     private UserFixture() {}
 
     public static User user() {
-        return User.createUser("user-1","바닐라",null);
+        return user("user-1", "바닐라", null);
     }
 
     public static User user(String id, String nickname) {
-        return User.createUser(id,nickname,null);
+        return user(id, nickname, null);
+    }
+
+    public static User user(String id, String nickname, String profileImageKey) {
+        return User.createUser(id, nickname, profileImageKey);
     }
 }

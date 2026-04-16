@@ -9,6 +9,7 @@ import com.vani.week4.backend.post.dto.response.PostDetailResponse;
 import com.vani.week4.backend.post.entity.Post;
 import com.vani.week4.backend.post.repository.PostRepository;
 import com.vani.week4.backend.post.service.PostService;
+import com.vani.week4.backend.support.fixture.UserFixture;
 import com.vani.week4.backend.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +51,7 @@ class PostServiceTest {
 
     @BeforeEach
     void setUp() {
-        testUser = User.createUser(
+        testUser = UserFixture.user(
                 UlidCreator.getUlid().toString(),
                 "테스트유저",
                 "profile-image-key"

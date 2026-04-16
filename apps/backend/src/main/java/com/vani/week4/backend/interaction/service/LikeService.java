@@ -36,27 +36,39 @@ public class LikeService {
     }
 
     /**
-     * 게시글의 좋아요를 토글
-     * 이미 좋아요 했다면 취소, 좋아요하지 않았다면 좋아요합니다.
-     * 수는 Redis에 캐싱, 스캐줄러를 통해 DB와 동기화
-     * */
+     * 게시글에 좋아요를 추가하고 캐시 count 를 증가시킵니다.
+     */
     @Transactional
-    public void toggleLike(User user, String postId){
-
-        String userId = user.getId();
-        UserPostLikeId likeId = new UserPostLikeId(userId, postId);
-
+    public void likePost(User user, String postId){
+        UserPostLikeId likeId = new UserPostLikeId(user.getId(), postId);
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new PostNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
-        log.info("좋아요 처리중 {} ", userId);
+        log.info("좋아요 추가 처리중 {}", user.getId());
 
-        if (likeRepository.existsById(likeId)){
-            likeRepository.deleteById(likeId);
-            likeCountCache.decrement(postId);
-        } else {
-            likeRepository.save(new Like(user, post));
-            likeCountCache.increment(postId);
+        if (likeRepository.existsById(likeId)) {
+            return;
         }
+
+        likeRepository.save(new Like(user, post));
+        likeCountCache.increment(postId);
+    }
+
+    /**
+     * 게시글의 좋아요를 취소하고 캐시 count 를 감소시킵니다.
+     */
+    @Transactional
+    public void unlikePost(User user, String postId){
+        UserPostLikeId likeId = new UserPostLikeId(user.getId(), postId);
+        postRepository.findById(postId)
+                .orElseThrow(() -> new PostNotFoundException(ErrorCode.RESOURCE_NOT_FOUND));
+        log.info("좋아요 취소 처리중 {}", user.getId());
+
+        if (!likeRepository.existsById(likeId)) {
+            return;
+        }
+
+        likeRepository.deleteById(likeId);
+        likeCountCache.decrement(postId);
     }
 
     /**
